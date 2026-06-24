@@ -8,8 +8,10 @@ Get-Content $configFile -Encoding UTF8 | ForEach-Object {
     if ($parts.Length -eq 2) { $cfg[$parts[0].Trim()] = $parts[1].Trim() }
 }
 $h = @{ Authorization = "Bearer $($cfg['github.token'])"; Accept = 'application/vnd.github+json' }
+$arts = Invoke-RestMethod -Uri 'https://api.github.com/repos/DaydayuPeng/floatscan/actions/artifacts?per_page=1&name=build-log' -Headers $h
+$id = $arts.artifacts[0].id
 $zip = Join-Path $env:TEMP 'build-log-artifact.zip'
-Invoke-WebRequest -Uri 'https://api.github.com/repos/DaydayuPeng/floatscan/actions/artifacts/7845169330/zip' -Headers $h -OutFile $zip
+Invoke-WebRequest -Uri "https://api.github.com/repos/DaydayuPeng/floatscan/actions/artifacts/$id/zip" -Headers $h -OutFile $zip
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $out = Join-Path $env:TEMP 'build-log-artifact'
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }

@@ -7,7 +7,7 @@
         <item name="android:windowBackground">@color/background</item>
     </style>
 
-    <style name="Theme.Transparent" parent="Theme.AppCompat.Translucent">
+    <style name="Theme.Transparent" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowContentOverlay">@null</item>
