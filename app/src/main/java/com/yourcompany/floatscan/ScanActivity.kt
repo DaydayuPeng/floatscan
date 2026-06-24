@@ -35,8 +35,8 @@ class ScanActivity : AppCompatActivity() {
         setContentView(R.layout.activity_scan)
 
         barcodeView = findViewById(R.id.barcodeView)
-        barcodeView.statusView.visibility = android.view.View.GONE
-        barcodeView.viewFinder.visibility = android.view.View.GONE
+        barcodeView.statusView?.visibility = android.view.View.GONE
+        barcodeView.viewFinder?.visibility = android.view.View.GONE
 
         val hints = EnumMap<DecodeHintType, Any>(DecodeHintType::class.java).apply {
             this[DecodeHintType.POSSIBLE_FORMATS] = listOf(
