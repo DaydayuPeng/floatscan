@@ -3,6 +3,7 @@ package com.yourcompany.floatscan
 import android.accessibilityservice.AccessibilityService
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -14,25 +15,33 @@ class InjectService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var retryCount = 0
+    private var weChatPrepared = false
 
     private val injectRunnable = Runnable { runInjectAttempt() }
 
     private fun runInjectAttempt() {
         val text = ScanResultBus.pendingText ?: return
         if (injectText(text)) {
-            ScanResultBus.pendingText = null
-            ScanResultBus.clearTarget()
-            retryCount = 0
+            resetInjectState()
             ScanResultBus.notifyInjectResult(true)
         } else if (retryCount++ < MAX_RETRIES) {
-            handler.postDelayed(injectRunnable, RETRY_DELAY_MS)
+            handler.postDelayed(injectRunnable, retryDelayMs())
         } else {
             copyToClipboard(text)
-            ScanResultBus.pendingText = null
-            ScanResultBus.clearTarget()
-            retryCount = 0
+            resetInjectState()
             ScanResultBus.notifyInjectResult(false)
         }
+    }
+
+    private fun resetInjectState() {
+        ScanResultBus.pendingText = null
+        ScanResultBus.clearTarget()
+        retryCount = 0
+        weChatPrepared = false
+    }
+
+    private fun retryDelayMs(): Long {
+        return if (ScanResultBus.targetPackage == WECHAT_PACKAGE) 450L else RETRY_DELAY_MS
     }
 
     override fun onServiceConnected() {
@@ -43,7 +52,12 @@ class InjectService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || ScanResultBus.pendingText == null) return
-        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        val type = event.eventType
+        if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            type != AccessibilityEvent.TYPE_VIEW_FOCUSED
+        ) {
+            return
+        }
         val pkg = event.packageName?.toString() ?: return
         if (pkg == packageName || pkg == "com.android.systemui") return
         val target = ScanResultBus.targetPackage
@@ -64,7 +78,6 @@ class InjectService : AccessibilityService() {
         super.onDestroy()
     }
 
-    /** 点击悬浮球时调用，记录当前前台应用 */
     fun captureTargetApp() {
         ScanResultBus.targetPackage = findForegroundThirdPartyPackage()
     }
@@ -73,10 +86,16 @@ class InjectService : AccessibilityService() {
         if (ScanResultBus.pendingText == null) return
         handler.removeCallbacks(injectRunnable)
         retryCount = 0
-        handler.postDelayed(injectRunnable, INITIAL_DELAY_MS)
+        weChatPrepared = false
+        val delay = if (ScanResultBus.targetPackage == WECHAT_PACKAGE) 700L else INITIAL_DELAY_MS
+        handler.postDelayed(injectRunnable, delay)
     }
 
     fun injectText(text: String): Boolean {
+        if (ScanResultBus.targetPackage == WECHAT_PACKAGE) {
+            if (tryInjectWeChat(text)) return true
+        }
+
         val roots = collectTargetRoots()
         if (roots.isEmpty()) return false
 
@@ -90,6 +109,106 @@ class InjectService : AccessibilityService() {
         return false
     }
 
+    /**
+     * 微信专用注入：先点击聚焦输入框，再通过全局粘贴填入（微信常拦截 SET_TEXT）。
+     */
+    private fun tryInjectWeChat(text: String): Boolean {
+        copyToClipboard(text)
+        val inputs = collectWeChatInputNodes()
+        if (inputs.isEmpty()) return false
+
+        try {
+            if (!weChatPrepared) {
+                for (node in inputs) {
+                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                }
+                weChatPrepared = true
+                return false
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                if (performGlobalAction(GLOBAL_ACTION_PASTE)) return true
+            }
+
+            for (node in inputs) {
+                if (node.performAction(AccessibilityNodeInfo.ACTION_PASTE)) return true
+                if (setTextOnNode(node, text)) return true
+            }
+        } finally {
+            inputs.forEach { it.recycle() }
+        }
+        return false
+    }
+
+    private fun collectWeChatInputNodes(): List<AccessibilityNodeInfo> {
+        val result = mutableListOf<AccessibilityNodeInfo>()
+        val seen = mutableSetOf<String>()
+
+        val roots = collectTargetRoots()
+        try {
+            for (root in roots) {
+                if (root.packageName?.toString() != WECHAT_PACKAGE) continue
+
+                for (viewId in WECHAT_INPUT_IDS) {
+                    val nodes = root.findAccessibilityNodeInfosByViewId(viewId) ?: continue
+                    for (node in nodes) {
+                        val key = node.viewIdResourceName + "@" + node.hashCode()
+                        if (seen.add(key)) {
+                            result.add(AccessibilityNodeInfo.obtain(node))
+                        }
+                    }
+                    nodes.forEach { it.recycle() }
+                }
+
+                collectWeChatInputRecursive(root, result, seen)
+            }
+        } finally {
+            roots.forEach { it.recycle() }
+        }
+        return result
+    }
+
+    private fun collectWeChatInputRecursive(
+        node: AccessibilityNodeInfo,
+        out: MutableList<AccessibilityNodeInfo>,
+        seen: MutableSet<String>
+    ) {
+        if (isWeChatInputCandidate(node)) {
+            val key = (node.viewIdResourceName ?: node.className?.toString() ?: "") + "@" + node.hashCode()
+            if (seen.add(key)) {
+                out.add(AccessibilityNodeInfo.obtain(node))
+            }
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            collectWeChatInputRecursive(child, out, seen)
+            child.recycle()
+        }
+    }
+
+    private fun isWeChatInputCandidate(node: AccessibilityNodeInfo): Boolean {
+        val viewId = node.viewIdResourceName ?: ""
+        if (viewId.startsWith(WECHAT_PACKAGE) &&
+            (viewId.contains("input", ignoreCase = true) ||
+                viewId.contains("edit", ignoreCase = true) ||
+                viewId.contains("chat", ignoreCase = true))
+        ) {
+            return true
+        }
+        val className = node.className?.toString() ?: return false
+        if (!className.contains("Edit", ignoreCase = true) &&
+            !className.contains("MM", ignoreCase = true)
+        ) {
+            return false
+        }
+        if (node.isEditable) return true
+        if (className.contains("EditText", ignoreCase = true) && node.isFocusable) return true
+        if (className.contains("MMEdit", ignoreCase = true)) return true
+        val desc = node.contentDescription?.toString() ?: ""
+        return desc.contains("输入") || desc.contains("发消息") || desc.contains("Type")
+    }
+
     private fun findForegroundThirdPartyPackage(): String? {
         val active = rootInActiveWindow
         if (active != null) {
@@ -99,7 +218,6 @@ class InjectService : AccessibilityService() {
         }
 
         windows?.forEach { window ->
-            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) return@forEach
             val root = window.root ?: return@forEach
             val pkg = root.packageName?.toString()
             root.recycle()
@@ -118,7 +236,7 @@ class InjectService : AccessibilityService() {
     private fun collectTargetRoots(): List<AccessibilityNodeInfo> {
         val targetPkg = ScanResultBus.targetPackage
         val roots = mutableListOf<AccessibilityNodeInfo>()
-        val seen = mutableSetOf<String>()
+        val seen = mutableSetOf<Int>()
 
         windows?.forEach { window ->
             if (window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return@forEach
@@ -132,7 +250,8 @@ class InjectService : AccessibilityService() {
                 root.recycle()
                 return@forEach
             }
-            if (seen.add(pkg)) {
+            val key = System.identityHashCode(root)
+            if (seen.add(key)) {
                 roots.add(AccessibilityNodeInfo.obtain(root))
             }
             root.recycle()
@@ -149,7 +268,7 @@ class InjectService : AccessibilityService() {
             if (ok) return true
         }
 
-        for (viewId in KNOWN_INPUT_IDS) {
+        for (viewId in BROWSER_INPUT_IDS) {
             val nodes = root.findAccessibilityNodeInfosByViewId(viewId) ?: continue
             try {
                 for (node in nodes) {
@@ -241,19 +360,32 @@ class InjectService : AccessibilityService() {
     }
 
     companion object {
-        private const val MAX_RETRIES = 15
+        private const val WECHAT_PACKAGE = "com.tencent.mm"
+        private const val MAX_RETRIES = 18
         private const val RETRY_DELAY_MS = 350L
         private const val INITIAL_DELAY_MS = 500L
 
-        private val KNOWN_INPUT_IDS = listOf(
-            // 微信
+        private val WECHAT_INPUT_IDS = listOf(
             "com.tencent.mm:id/bkk",
             "com.tencent.mm:id/al_",
             "com.tencent.mm:id/o4",
             "com.tencent.mm:id/cdk",
             "com.tencent.mm:id/b4e",
             "com.tencent.mm:id/pi",
-            // 夸克浏览器
+            "com.tencent.mm:id/chatting_content_et",
+            "com.tencent.mm:id/auj",
+            "com.tencent.mm:id/kao",
+            "com.tencent.mm:id/kii",
+            "com.tencent.mm:id/al7",
+            "com.tencent.mm:id/bhn",
+            "com.tencent.mm:id/aks",
+            "com.tencent.mm:id/szu",
+            "com.tencent.mm:id/m7b",
+            "com.tencent.mm:id/bkk",
+            "com.tencent.mm:id/p5g"
+        )
+
+        private val BROWSER_INPUT_IDS = listOf(
             "com.quark.browser:id/search_input",
             "com.quark.browser:id/url_bar",
             "com.quark.browser:id/et_input"
