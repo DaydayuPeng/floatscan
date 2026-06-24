@@ -64,6 +64,8 @@ class MainActivity : AppCompatActivity() {
                 FloatButtonService.stop(this)
             } else {
                 FloatButtonService.start(this)
+                // 退出到之前的应用，避免扫码后回到本应用设置页
+                moveTaskToBack(true)
             }
             refreshPermissionState()
         }

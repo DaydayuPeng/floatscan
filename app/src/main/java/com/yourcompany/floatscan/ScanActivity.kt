@@ -21,6 +21,7 @@ class ScanActivity : AppCompatActivity() {
             scanned = true
             val text = result.text ?: return
             ScanResultBus.deliverScanResult(text)
+            moveTaskToBack(true)
             finish()
             overridePendingTransition(0, 0)
         }

@@ -21,12 +21,15 @@ class InjectService : AccessibilityService() {
         val text = ScanResultBus.pendingText ?: return
         if (injectText(text)) {
             ScanResultBus.pendingText = null
+            ScanResultBus.clearTarget()
             retryCount = 0
             ScanResultBus.notifyInjectResult(true)
         } else if (retryCount++ < MAX_RETRIES) {
             handler.postDelayed(injectRunnable, RETRY_DELAY_MS)
         } else {
+            copyToClipboard(text)
             ScanResultBus.pendingText = null
+            ScanResultBus.clearTarget()
             retryCount = 0
             ScanResultBus.notifyInjectResult(false)
         }
@@ -43,8 +46,10 @@ class InjectService : AccessibilityService() {
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         if (pkg == packageName || pkg == "com.android.systemui") return
+        val target = ScanResultBus.targetPackage
+        if (target != null && pkg != target) return
         handler.removeCallbacks(injectRunnable)
-        handler.postDelayed(injectRunnable, 250)
+        handler.postDelayed(injectRunnable, 200)
     }
 
     override fun onInterrupt() {
@@ -59,11 +64,16 @@ class InjectService : AccessibilityService() {
         super.onDestroy()
     }
 
+    /** 点击悬浮球时调用，记录当前前台应用 */
+    fun captureTargetApp() {
+        ScanResultBus.targetPackage = findForegroundThirdPartyPackage()
+    }
+
     fun scheduleInject() {
         if (ScanResultBus.pendingText == null) return
         handler.removeCallbacks(injectRunnable)
         retryCount = 0
-        handler.postDelayed(injectRunnable, 300)
+        handler.postDelayed(injectRunnable, INITIAL_DELAY_MS)
     }
 
     fun injectText(text: String): Boolean {
@@ -80,34 +90,54 @@ class InjectService : AccessibilityService() {
         return false
     }
 
+    private fun findForegroundThirdPartyPackage(): String? {
+        val active = rootInActiveWindow
+        if (active != null) {
+            val pkg = active.packageName?.toString()
+            active.recycle()
+            if (!pkg.isNullOrEmpty() && isTargetPackage(pkg)) return pkg
+        }
+
+        windows?.forEach { window ->
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) return@forEach
+            val root = window.root ?: return@forEach
+            val pkg = root.packageName?.toString()
+            root.recycle()
+            if (!pkg.isNullOrEmpty() && isTargetPackage(pkg)) return pkg
+        }
+        return null
+    }
+
+    private fun isTargetPackage(pkg: String): Boolean {
+        return pkg != packageName &&
+            pkg != "com.android.systemui" &&
+            pkg != "com.android.launcher" &&
+            !pkg.contains("launcher", ignoreCase = true)
+    }
+
     private fun collectTargetRoots(): List<AccessibilityNodeInfo> {
+        val targetPkg = ScanResultBus.targetPackage
         val roots = mutableListOf<AccessibilityNodeInfo>()
-        val seen = mutableSetOf<Int>()
+        val seen = mutableSetOf<String>()
 
         windows?.forEach { window ->
             if (window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return@forEach
             val root = window.root ?: return@forEach
             val pkg = root.packageName?.toString() ?: ""
-            if (pkg == packageName || pkg.isEmpty()) {
+            if (!isTargetPackage(pkg)) {
                 root.recycle()
                 return@forEach
             }
-            val key = System.identityHashCode(root)
-            if (seen.add(key)) {
+            if (targetPkg != null && pkg != targetPkg) {
+                root.recycle()
+                return@forEach
+            }
+            if (seen.add(pkg)) {
                 roots.add(AccessibilityNodeInfo.obtain(root))
             }
             root.recycle()
         }
 
-        if (roots.isEmpty()) {
-            val active = rootInActiveWindow ?: return roots
-            val pkg = active.packageName?.toString() ?: ""
-            if (pkg != packageName && pkg.isNotEmpty()) {
-                roots.add(active)
-            } else {
-                active.recycle()
-            }
-        }
         return roots
     }
 
@@ -119,7 +149,7 @@ class InjectService : AccessibilityService() {
             if (ok) return true
         }
 
-        for (viewId in WECHAT_INPUT_IDS) {
+        for (viewId in KNOWN_INPUT_IDS) {
             val nodes = root.findAccessibilityNodeInfosByViewId(viewId) ?: continue
             try {
                 for (node in nodes) {
@@ -159,8 +189,7 @@ class InjectService : AccessibilityService() {
     }
 
     private fun pasteIntoNode(node: AccessibilityNodeInfo, text: String): Boolean {
-        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("floatscan", text))
+        copyToClipboard(text)
         if (!node.isFocused) {
             node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
         }
@@ -169,6 +198,11 @@ class InjectService : AccessibilityService() {
             return node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
         }
         return false
+    }
+
+    private fun copyToClipboard(text: String) {
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("floatscan", text))
     }
 
     private fun findBestEditableNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
@@ -198,23 +232,31 @@ class InjectService : AccessibilityService() {
         if (node.isEditable) return true
         val className = node.className?.toString() ?: return false
         if (className.contains("EditText", ignoreCase = true)) return true
+        if (className.contains("WebView", ignoreCase = true) && node.isFocusable) return true
         if (className.contains("Input", ignoreCase = true) && node.isFocusable) return true
         val viewId = node.viewIdResourceName ?: return false
         return viewId.contains("input", ignoreCase = true) ||
-            viewId.contains("edit", ignoreCase = true)
+            viewId.contains("edit", ignoreCase = true) ||
+            viewId.contains("url", ignoreCase = true)
     }
 
     companion object {
-        private const val MAX_RETRIES = 10
-        private const val RETRY_DELAY_MS = 400L
+        private const val MAX_RETRIES = 15
+        private const val RETRY_DELAY_MS = 350L
+        private const val INITIAL_DELAY_MS = 500L
 
-        private val WECHAT_INPUT_IDS = listOf(
+        private val KNOWN_INPUT_IDS = listOf(
+            // 微信
             "com.tencent.mm:id/bkk",
             "com.tencent.mm:id/al_",
             "com.tencent.mm:id/o4",
             "com.tencent.mm:id/cdk",
             "com.tencent.mm:id/b4e",
-            "com.tencent.mm:id/pi"
+            "com.tencent.mm:id/pi",
+            // 夸克浏览器
+            "com.quark.browser:id/search_input",
+            "com.quark.browser:id/url_bar",
+            "com.quark.browser:id/et_input"
         )
 
         @Volatile

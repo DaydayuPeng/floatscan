@@ -166,8 +166,13 @@ class FloatButtonService : Service() {
     }
 
     private fun launchScan() {
+        InjectService.instance?.captureTargetApp()
         val intent = Intent(this, ScanActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_NO_ANIMATION or
+                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+            )
         }
         startActivity(intent)
     }

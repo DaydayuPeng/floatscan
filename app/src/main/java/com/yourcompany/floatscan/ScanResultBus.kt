@@ -8,6 +8,10 @@ object ScanResultBus {
     @Volatile
     var pendingText: String? = null
 
+    /** 点击悬浮球时记录的前台应用包名（微信、夸克等） */
+    @Volatile
+    var targetPackage: String? = null
+
     var onInjectResult: ((success: Boolean) -> Unit)? = null
 
     fun deliverScanResult(text: String) {
@@ -17,5 +21,9 @@ object ScanResultBus {
 
     fun notifyInjectResult(success: Boolean) {
         onInjectResult?.invoke(success)
+    }
+
+    fun clearTarget() {
+        targetPackage = null
     }
 }
