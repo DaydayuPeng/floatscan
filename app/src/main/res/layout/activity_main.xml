@@ -108,7 +108,7 @@
                 app:cardCornerRadius="@dimen/card_radius"
                 app:cardElevation="2dp"
                 app:strokeColor="@color/outline"
-                app:strokeWidth="0.5dp">
+                app:strokeWidth="1dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"

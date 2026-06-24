@@ -3,6 +3,7 @@ package com.yourcompany.floatscan
 import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
+import android.content.res.ColorStateList
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -34,6 +35,8 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var batteryStatus: TextView
     private lateinit var batteryBtn: MaterialButton
+
+    private var notificationRequested = false
 
     private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -71,6 +74,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         refreshPermissionState()
+        requestNotificationOnce()
     }
 
     override fun onResume() {
@@ -115,8 +119,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshPermissionState() {
-        requestNotificationIfNeeded()
-
         val cameraGranted = hasCameraPermission()
         updatePermRow(cameraStatus, cameraBtn, cameraGranted)
 
@@ -136,13 +138,13 @@ class MainActivity : AppCompatActivity() {
         if (running) {
             btnToggleFloat.text = getString(R.string.btn_stop_float)
             btnToggleFloat.backgroundTintList =
-                ContextCompat.getColorStateList(this, R.color.error)
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.error))
             tvFloatStatus.text = getString(R.string.float_running)
             tvFloatStatus.setTextColor(ContextCompat.getColor(this, R.color.status_granted))
         } else {
             btnToggleFloat.text = getString(R.string.btn_start_float)
             btnToggleFloat.backgroundTintList =
-                ContextCompat.getColorStateList(this, R.color.primary)
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.primary))
             tvFloatStatus.text = getString(R.string.float_stopped)
             tvFloatStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
         }
@@ -162,16 +164,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestNotificationIfNeeded() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+    private fun requestNotificationOnce() {
+        if (notificationRequested) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            return
         }
+        notificationRequested = true
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     private fun hasCameraPermission(): Boolean {

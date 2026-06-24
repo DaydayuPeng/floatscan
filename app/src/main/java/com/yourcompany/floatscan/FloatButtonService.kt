@@ -49,6 +49,7 @@ class FloatButtonService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isServiceRunning = true
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         startForeground(NOTIFICATION_ID, createNotification())
         showFloatButton()
@@ -63,6 +64,7 @@ class FloatButtonService : Service() {
     }
 
     override fun onDestroy() {
+        isServiceRunning = false
         ScanResultBus.onInjectResult = null
         removeFloatButton()
         super.onDestroy()
@@ -283,6 +285,9 @@ class FloatButtonService : Service() {
         private const val NOTIFICATION_ID = 1001
         private const val FLOAT_SIZE_DP = 48
 
+        @Volatile
+        var isServiceRunning = false
+
         fun start(context: Context) {
             val intent = Intent(context, FloatButtonService::class.java)
             ContextCompat.startForegroundService(context, intent)
@@ -293,10 +298,7 @@ class FloatButtonService : Service() {
         }
 
         fun isRunning(context: Context): Boolean {
-            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-            @Suppress("DEPRECATION")
-            return manager.getRunningServices(Int.MAX_VALUE)
-                .any { it.service.className == FloatButtonService::class.java.name }
+            return isServiceRunning
         }
     }
 }
