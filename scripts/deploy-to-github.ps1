@@ -1,8 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  读取 github.local.properties，将项目推送到 GitHub 并触发云端 APK 构建。
-
+  Read github.local.properties, push project to GitHub, trigger APK build.
 .USAGE
   powershell -ExecutionPolicy Bypass -File scripts\deploy-to-github.ps1
 #>
@@ -38,8 +37,8 @@ function Invoke-GitHubApi {
         [object]$Body = $null
     )
     $headers = @{
-        Authorization = "Bearer $Token"
-        Accept        = "application/vnd.github+json"
+        Authorization        = "Bearer $Token"
+        Accept               = "application/vnd.github+json"
         "X-GitHub-Api-Version" = "2022-11-28"
     }
     $params = @{
@@ -48,10 +47,98 @@ function Invoke-GitHubApi {
         Headers = $headers
     }
     if ($null -ne $Body) {
-        $params.Body = ($Body | ConvertTo-Json)
+        $params.Body = ($Body | ConvertTo-Json -Depth 8)
         $params.ContentType = "application/json"
     }
     return Invoke-RestMethod @params
+}
+
+function Get-ProjectFiles {
+    param([string]$Root)
+    $excludeDirs = @('.git', 'build', '.gradle', '.idea', 'out', 'captures', '.cxx')
+    $excludeFiles = @('github.local.properties', 'local.properties')
+    $files = @()
+    foreach ($item in Get-ChildItem -Path $Root -Recurse -File -Force) {
+        $rel = $item.FullName.Substring($Root.Length + 1).Replace('\', '/')
+        if ($excludeFiles -contains (Split-Path $rel -Leaf)) { continue }
+        $skip = $false
+        foreach ($dir in $excludeDirs) {
+            if ($rel -eq $dir -or $rel.StartsWith("$dir/")) { $skip = $true; break }
+        }
+        if (-not $skip) { $files += $item }
+    }
+    return $files
+}
+
+function Push-ViaGitHubApi {
+    param(
+        [string]$Owner,
+        [string]$Repo,
+        [string]$Token,
+        [string]$Root
+    )
+    Write-Host '>>> Git push failed, trying GitHub API upload...'
+    $files = Get-ProjectFiles -Root $Root
+    Write-Host ">>> Uploading $($files.Count) files via API..."
+
+    $treeItems = New-Object System.Collections.Generic.List[object]
+    $index = 0
+    foreach ($file in $files) {
+        $index++
+        $relPath = $file.FullName.Substring($Root.Length + 1).Replace('\', '/')
+        if ($index % 10 -eq 0) { Write-Host ">>>   $index / $($files.Count)" }
+        $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+        $b64 = [Convert]::ToBase64String($bytes)
+        $blob = Invoke-GitHubApi -Method POST `
+            -Url "https://api.github.com/repos/$Owner/$Repo/git/blobs" `
+            -Token $Token `
+            -Body @{ content = $b64; encoding = 'base64' }
+        $treeItems.Add(@{
+            path = $relPath
+            mode = '100644'
+            type = 'blob'
+            sha  = $blob.sha
+        })
+    }
+
+    $parentSha = $null
+    try {
+        $ref = Invoke-GitHubApi -Method GET `
+            -Url "https://api.github.com/repos/$Owner/$Repo/git/ref/heads/main" `
+            -Token $Token
+        $parentSha = $ref.object.sha
+    } catch {
+        $parentSha = $null
+    }
+
+    $tree = Invoke-GitHubApi -Method POST `
+        -Url "https://api.github.com/repos/$Owner/$Repo/git/trees" `
+        -Token $Token `
+        -Body @{ tree = $treeItems.ToArray() }
+
+    $commitBody = @{
+        message = 'Deploy FloatScan Android app'
+        tree    = $tree.sha
+    }
+    if ($parentSha) { $commitBody.parents = @($parentSha) }
+
+    $commit = Invoke-GitHubApi -Method POST `
+        -Url "https://api.github.com/repos/$Owner/$Repo/git/commits" `
+        -Token $Token `
+        -Body $commitBody
+
+    if ($parentSha) {
+        Invoke-GitHubApi -Method PATCH `
+            -Url "https://api.github.com/repos/$Owner/$Repo/git/refs/heads/main" `
+            -Token $Token `
+            -Body @{ sha = $commit.sha } | Out-Null
+    } else {
+        Invoke-GitHubApi -Method POST `
+            -Url "https://api.github.com/repos/$Owner/$Repo/git/refs" `
+            -Token $Token `
+            -Body @{ ref = 'refs/heads/main'; sha = $commit.sha } | Out-Null
+    }
+    Write-Host '>>> API upload complete.'
 }
 
 $config = Read-Config
@@ -63,36 +150,31 @@ $repo = $config['github.repo']
 if (-not $repo) { $repo = $config.Get_Item('github.repo') }
 
 if (-not $token -or $token.Trim().Length -eq 0) {
-    $keys = ($config.Keys | ForEach-Object { "'$_'" }) -join ', '
-    throw "github.token is empty. Parsed keys: $keys"
+    throw "github.token is empty in github.local.properties"
 }
-if (-not $owner -or $owner.Trim().Length -eq 0) { throw "github.owner is empty in github.local.properties" }
-if (-not $repo -or $repo.Trim().Length -eq 0) { throw "github.repo is empty in github.local.properties" }
+if (-not $owner -or $owner.Trim().Length -eq 0) {
+    throw "github.owner is empty in github.local.properties"
+}
+if (-not $repo -or $repo.Trim().Length -eq 0) {
+    throw "github.repo is empty in github.local.properties"
+}
 
 Set-Location $ProjectRoot
-Write-Host ">>> 项目目录: $ProjectRoot"
+Write-Host ">>> Project: $ProjectRoot"
 
-# 初始化 Git
 if (-not (Test-Path ".git")) {
-    Write-Host ">>> 初始化 Git 仓库..."
+    Write-Host ">>> Init git..."
     git init | Out-Null
     git branch -M main 2>$null
 }
 
-# 确保有提交
 git add -A
 $status = git status --porcelain
 if ($status) {
-    Write-Host ">>> 创建提交..."
-    git commit -m "Initial commit: FloatScan Android app" | Out-Null
-} else {
-    $commitCount = (git rev-list --count HEAD 2>$null)
-    if (-not $commitCount -or [int]$commitCount -eq 0) {
-        git commit --allow-empty -m "Initial commit: FloatScan Android app" | Out-Null
-    }
+    Write-Host ">>> Commit..."
+    git commit -m "Deploy FloatScan Android app" | Out-Null
 }
 
-# 检查远程仓库是否存在，不存在则创建
 $repoUrl = "https://api.github.com/repos/$owner/$repo"
 $repoExists = $true
 try {
@@ -102,7 +184,7 @@ try {
 }
 
 if (-not $repoExists) {
-    Write-Host ">>> 远程仓库不存在，正在创建 $owner/$repo ..."
+    Write-Host ">>> Create repo $owner/$repo ..."
     Invoke-GitHubApi -Method POST -Url "https://api.github.com/user/repos" -Token $token -Body @{
         name        = $repo
         description = "FloatScan - floating barcode scanner injector"
@@ -112,7 +194,6 @@ if (-not $repoExists) {
     Start-Sleep -Seconds 2
 }
 
-# 配置 remote 并推送
 $remoteUrl = "https://x-access-token:${token}@github.com/${owner}/${repo}.git"
 if (git remote | Select-String -Pattern "^origin$" -Quiet) {
     git remote set-url origin $remoteUrl
@@ -121,33 +202,39 @@ if (git remote | Select-String -Pattern "^origin$" -Quiet) {
 }
 
 Write-Host '>>> Pushing to GitHub...'
-$pushResult = git push -u origin main 2>&1
-if ($LASTEXITCODE -ne 0) {
-    $pushText = $pushResult | Out-String
-    if ($pushText -match 'workflow') {
-        throw 'GitHub token missing workflow scope. Regenerate token with repo + workflow, update github.local.properties, then run again.'
+$pushOk = $true
+try {
+    $pushResult = git push -u origin main 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $pushText = $pushResult | Out-String
+        if ($pushText -match 'workflow') {
+            throw 'GitHub token missing workflow scope. Add repo + workflow, update github.local.properties.'
+        }
+        $pushOk = $false
     }
-    throw "git push failed: $pushText"
+} catch {
+    $pushOk = $false
 }
 
-# 触发 GitHub Actions 构建
-Write-Host ">>> 触发云端 APK 构建..."
+if (-not $pushOk) {
+    Push-ViaGitHubApi -Owner $owner -Repo $repo -Token $token -Root $ProjectRoot
+}
+
+Write-Host '>>> Trigger cloud APK build...'
 try {
     Invoke-GitHubApi -Method POST `
         -Url "https://api.github.com/repos/$owner/$repo/actions/workflows/build-apk.yml/dispatches" `
         -Token $token `
-        -Body @{ ref = "main" } | Out-Null
+        -Body @{ ref = 'main' } | Out-Null
     Write-Host ''
     Write-Host '=========================================='
     Write-Host '  Deploy success!'
-    Write-Host "  Repo: https://github.com/$owner/$repo"
+    Write-Host "  Repo:  https://github.com/$owner/$repo"
     Write-Host "  Build: https://github.com/$owner/$repo/actions"
-    Write-Host ''
-    Write-Host '  Wait 3-5 min, then download APK from Artifacts.'
+    Write-Host '  Wait 3-5 min, download APK from Artifacts.'
     Write-Host '=========================================='
 } catch {
-    $actionsUrl = "https://github.com/$owner/$repo/actions"
-    Write-Host '>>> Push done, but workflow trigger failed.'
-    Write-Host ">>> Open manually: $actionsUrl"
+    Write-Host '>>> Code uploaded, but workflow trigger failed.'
+    Write-Host ">>> Open: https://github.com/$owner/$repo/actions"
     Write-Host '>>> Click Build APK, then Run workflow.'
 }
