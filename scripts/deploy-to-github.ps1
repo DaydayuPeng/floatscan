@@ -120,8 +120,15 @@ if (git remote | Select-String -Pattern "^origin$" -Quiet) {
     git remote add origin $remoteUrl
 }
 
-Write-Host ">>> 推送到 GitHub..."
-git push -u origin main --force
+Write-Host '>>> Pushing to GitHub...'
+$pushResult = git push -u origin main 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $pushText = $pushResult | Out-String
+    if ($pushText -match 'workflow') {
+        throw 'GitHub token missing workflow scope. Regenerate token with repo + workflow, update github.local.properties, then run again.'
+    }
+    throw "git push failed: $pushText"
+}
 
 # 触发 GitHub Actions 构建
 Write-Host ">>> 触发云端 APK 构建..."
