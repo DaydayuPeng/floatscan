@@ -16,7 +16,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.card.MaterialCardView
 
 class MainActivity : AppCompatActivity() {
 
@@ -24,23 +23,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnToggleFloat: MaterialButton
     private lateinit var tvFloatStatus: TextView
 
-    private lateinit var cameraTitle: TextView
-    private lateinit var cameraDesc: TextView
     private lateinit var cameraStatus: TextView
     private lateinit var cameraBtn: MaterialButton
 
-    private lateinit var overlayTitle: TextView
-    private lateinit var overlayDesc: TextView
     private lateinit var overlayStatus: TextView
     private lateinit var overlayBtn: MaterialButton
 
-    private lateinit var accessibilityTitle: TextView
-    private lateinit var accessibilityDesc: TextView
     private lateinit var accessibilityStatus: TextView
     private lateinit var accessibilityBtn: MaterialButton
 
-    private lateinit var batteryTitle: TextView
-    private lateinit var batteryDesc: TextView
     private lateinit var batteryStatus: TextView
     private lateinit var batteryBtn: MaterialButton
 
@@ -90,52 +81,32 @@ class MainActivity : AppCompatActivity() {
         btnToggleFloat = findViewById(R.id.btnToggleFloat)
         tvFloatStatus = findViewById(R.id.tvFloatStatus)
 
-        val cardCamera = findViewById<MaterialCardView>(R.id.cardCamera)
-        cameraTitle = cardCamera.findViewById(R.id.tvPermTitle)
-        cameraDesc = cardCamera.findViewById(R.id.tvPermDesc)
-        cameraStatus = cardCamera.findViewById(R.id.tvPermStatus)
-        cameraBtn = cardCamera.findViewById(R.id.btnPermAction)
+        cameraStatus = findViewById(R.id.tvCameraStatus)
+        cameraBtn = findViewById(R.id.btnCameraAction)
 
-        val cardOverlay = findViewById<MaterialCardView>(R.id.cardOverlay)
-        overlayTitle = cardOverlay.findViewById(R.id.tvPermTitle)
-        overlayDesc = cardOverlay.findViewById(R.id.tvPermDesc)
-        overlayStatus = cardOverlay.findViewById(R.id.tvPermStatus)
-        overlayBtn = cardOverlay.findViewById(R.id.btnPermAction)
+        overlayStatus = findViewById(R.id.tvOverlayStatus)
+        overlayBtn = findViewById(R.id.btnOverlayAction)
 
-        val cardAccessibility = findViewById<MaterialCardView>(R.id.cardAccessibility)
-        accessibilityTitle = cardAccessibility.findViewById(R.id.tvPermTitle)
-        accessibilityDesc = cardAccessibility.findViewById(R.id.tvPermDesc)
-        accessibilityStatus = cardAccessibility.findViewById(R.id.tvPermStatus)
-        accessibilityBtn = cardAccessibility.findViewById(R.id.btnPermAction)
+        accessibilityStatus = findViewById(R.id.tvAccessibilityStatus)
+        accessibilityBtn = findViewById(R.id.btnAccessibilityAction)
 
-        val cardBattery = findViewById<MaterialCardView>(R.id.cardBattery)
-        batteryTitle = cardBattery.findViewById(R.id.tvPermTitle)
-        batteryDesc = cardBattery.findViewById(R.id.tvPermDesc)
-        batteryStatus = cardBattery.findViewById(R.id.tvPermStatus)
-        batteryBtn = cardBattery.findViewById(R.id.btnPermAction)
+        batteryStatus = findViewById(R.id.tvBatteryStatus)
+        batteryBtn = findViewById(R.id.btnBatteryAction)
     }
 
     private fun setupPermissionCards() {
-        cameraTitle.text = getString(R.string.perm_camera)
-        cameraDesc.text = getString(R.string.perm_camera_desc)
         cameraBtn.setOnClickListener {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
 
-        overlayTitle.text = getString(R.string.perm_overlay)
-        overlayDesc.text = getString(R.string.perm_overlay_desc)
         overlayBtn.setOnClickListener {
             overlayPermissionLauncher.launch(VendorHelper.getOverlaySettingsIntent(this))
         }
 
-        accessibilityTitle.text = getString(R.string.perm_accessibility)
-        accessibilityDesc.text = getString(R.string.perm_accessibility_desc)
         accessibilityBtn.setOnClickListener {
             startActivity(VendorHelper.getAccessibilitySettingsIntent())
         }
 
-        batteryTitle.text = getString(R.string.perm_battery)
-        batteryDesc.text = getString(R.string.perm_battery_desc)
         batteryBtn.setOnClickListener {
             VendorHelper.openIgnoreBatteryOptimizations(this)
         }

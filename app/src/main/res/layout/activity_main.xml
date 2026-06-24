@@ -57,7 +57,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvVendorHint">
 
-        <include layout="@layout/item_permission" />
+        <include layout="@layout/perm_camera" />
     </com.google.android.material.card.MaterialCardView>
 
     <com.google.android.material.card.MaterialCardView
@@ -71,9 +71,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/cardCamera">
 
-        <include
-            android:id="@+id/includeOverlay"
-            layout="@layout/item_permission" />
+        <include layout="@layout/perm_overlay" />
     </com.google.android.material.card.MaterialCardView>
 
     <com.google.android.material.card.MaterialCardView
@@ -87,9 +85,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/cardOverlay">
 
-        <include
-            android:id="@+id/includeAccessibility"
-            layout="@layout/item_permission" />
+        <include layout="@layout/perm_accessibility" />
     </com.google.android.material.card.MaterialCardView>
 
     <com.google.android.material.card.MaterialCardView
@@ -103,9 +99,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/cardAccessibility">
 
-        <include
-            android:id="@+id/includeBattery"
-            layout="@layout/item_permission" />
+        <include layout="@layout/perm_battery" />
     </com.google.android.material.card.MaterialCardView>
 
     <com.google.android.material.button.MaterialButton
