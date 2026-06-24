@@ -128,7 +128,8 @@ class InjectService : AccessibilityService() {
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                if (performGlobalAction(GLOBAL_ACTION_PASTE)) return true
+                @Suppress("WrongConstant")
+                if (performGlobalAction(32768)) return true // GLOBAL_ACTION_PASTE
             }
 
             for (node in inputs) {
@@ -381,7 +382,6 @@ class InjectService : AccessibilityService() {
             "com.tencent.mm:id/aks",
             "com.tencent.mm:id/szu",
             "com.tencent.mm:id/m7b",
-            "com.tencent.mm:id/bkk",
             "com.tencent.mm:id/p5g"
         )
 
