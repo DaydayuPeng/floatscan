@@ -12,7 +12,7 @@ object ScanResultBus {
 
     fun deliverScanResult(text: String) {
         pendingText = text
-        InjectService.instance?.injectPendingText()
+        InjectService.instance?.scheduleInject()
     }
 
     fun notifyInjectResult(success: Boolean) {
