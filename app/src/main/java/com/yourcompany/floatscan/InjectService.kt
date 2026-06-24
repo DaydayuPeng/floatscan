@@ -15,8 +15,10 @@ class InjectService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private var retryCount = 0
 
-    private val injectRunnable = Runnable {
-        val text = ScanResultBus.pendingText ?: return@Runnable
+    private val injectRunnable = Runnable { runInjectAttempt() }
+
+    private fun runInjectAttempt() {
+        val text = ScanResultBus.pendingText ?: return
         if (injectText(text)) {
             ScanResultBus.pendingText = null
             retryCount = 0
