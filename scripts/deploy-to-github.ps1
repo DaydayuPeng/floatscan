@@ -70,6 +70,31 @@ function Get-ProjectFiles {
     return $files
 }
 
+function Initialize-EmptyRepo {
+    param(
+        [string]$Owner,
+        [string]$Repo,
+        [string]$Token
+    )
+    try {
+        Invoke-GitHubApi -Method GET `
+            -Url "https://api.github.com/repos/$Owner/$Repo/git/ref/heads/main" `
+            -Token $Token | Out-Null
+        return
+    } catch {
+        Write-Host '>>> Initialize empty repo with README...'
+        $readme = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("# FloatScan`n"))
+        Invoke-GitHubApi -Method PUT `
+            -Url "https://api.github.com/repos/$Owner/$Repo/contents/README.md" `
+            -Token $Token `
+            -Body @{
+                message = 'Initialize repository'
+                content = $readme
+            } | Out-Null
+        Start-Sleep -Seconds 2
+    }
+}
+
 function Push-ViaGitHubApi {
     param(
         [string]$Owner,
@@ -78,6 +103,7 @@ function Push-ViaGitHubApi {
         [string]$Root
     )
     Write-Host '>>> Git push failed, trying GitHub API upload...'
+    Initialize-EmptyRepo -Owner $Owner -Repo $Repo -Token $Token
     $files = Get-ProjectFiles -Root $Root
     Write-Host ">>> Uploading $($files.Count) files via API..."
 
