@@ -3,7 +3,6 @@ package com.yourcompany.floatscan
 import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
-import android.content.res.ColorStateList
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -135,31 +134,34 @@ class MainActivity : AppCompatActivity() {
         btnToggleFloat.isEnabled = allGranted
 
         val running = FloatButtonService.isRunning(this)
-        if (running) {
-            btnToggleFloat.text = getString(R.string.btn_stop_float)
-            btnToggleFloat.backgroundTintList =
-                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.error))
-            tvFloatStatus.text = getString(R.string.float_running)
-            tvFloatStatus.setTextColor(ContextCompat.getColor(this, R.color.status_granted))
+        btnToggleFloat.text = if (running) {
+            getString(R.string.btn_stop_float)
         } else {
-            btnToggleFloat.text = getString(R.string.btn_start_float)
-            btnToggleFloat.backgroundTintList =
-                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.primary))
-            tvFloatStatus.text = getString(R.string.float_stopped)
-            tvFloatStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+            getString(R.string.btn_start_float)
         }
+        tvFloatStatus.text = if (running) {
+            getString(R.string.float_running)
+        } else {
+            getString(R.string.float_stopped)
+        }
+        tvFloatStatus.setTextColor(
+            ContextCompat.getColor(
+                this,
+                if (running) R.color.status_granted else R.color.text_secondary
+            )
+        )
     }
 
     private fun updatePermRow(statusView: TextView, btn: MaterialButton, granted: Boolean) {
         if (granted) {
             statusView.text = getString(R.string.status_granted)
             statusView.setTextColor(ContextCompat.getColor(this, R.color.status_granted))
-            statusView.setBackgroundResource(R.drawable.bg_chip_granted)
+            statusView.setBackgroundResource(0)
             btn.visibility = View.GONE
         } else {
             statusView.text = getString(R.string.status_pending)
             statusView.setTextColor(ContextCompat.getColor(this, R.color.status_pending))
-            statusView.setBackgroundResource(R.drawable.bg_chip_pending)
+            statusView.setBackgroundResource(0)
             btn.visibility = View.VISIBLE
         }
     }
@@ -190,9 +192,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun isAccessibilityServiceEnabled(): Boolean {
-        val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-        val enabled = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-        return enabled.any { it.resolveInfo.serviceInfo.packageName == packageName }
+        return try {
+            val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+            val enabled = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            enabled.any { it.resolveInfo.serviceInfo.packageName == packageName }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun isBatteryOptimizationIgnored(): Boolean {
