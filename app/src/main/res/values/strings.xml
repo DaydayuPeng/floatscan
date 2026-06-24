@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FloatScan</string>
+    <string name="accessibility_service_description">将扫码结果自动填入当前输入框</string>
+
+    <string name="title_main">FloatScan 扫码注入器</string>
+    <string name="subtitle_main">请依次开启以下权限后使用悬浮扫码功能</string>
+
+    <string name="perm_camera">相机权限</string>
+    <string name="perm_camera_desc">用于扫描快递一维码</string>
+    <string name="perm_overlay">悬浮窗权限</string>
+    <string name="perm_overlay_desc">在屏幕顶层显示扫码悬浮球</string>
+    <string name="perm_accessibility">无障碍服务</string>
+    <string name="perm_accessibility_desc">将扫码结果注入当前输入框</string>
+    <string name="perm_battery">省电限制</string>
+    <string name="perm_battery_desc">关闭省电策略，防止悬浮球被系统杀死</string>
+
+    <string name="btn_grant">去开启</string>
+    <string name="status_granted">已开启</string>
+    <string name="status_pending">未开启</string>
+
+    <string name="btn_start_float">启动悬浮球</string>
+    <string name="btn_stop_float">停止悬浮球</string>
+    <string name="float_running">悬浮球运行中</string>
+    <string name="float_stopped">悬浮球已停止</string>
+
+    <string name="toast_inject_failed">未找到输入框，请重试</string>
+    <string name="toast_scan_cancelled">已取消扫码</string>
+    <string name="toast_all_perms_required">请先完成全部权限设置</string>
+    <string name="toast_battery_manual">请手动关闭省电策略和应用速冻</string>
+
+    <string name="notification_channel_name">悬浮扫码服务</string>
+    <string name="notification_channel_desc">保持悬浮扫码按钮在后台运行</string>
+    <string name="notification_title">FloatScan 运行中</string>
+    <string name="notification_text">点击悬浮球即可扫码</string>
+
+    <string name="vendor_hint_xiaomi">小米/红米：请在权限管理中允许「显示悬浮窗」和「后台弹出界面」，并关闭省电限制。</string>
+    <string name="vendor_hint_huawei">华为/荣耀：请在应用启动管理中设为「手动管理」，并允许后台活动与悬浮窗。</string>
+    <string name="vendor_hint_oppo">OPPO/一加：请在权限与隐私中允许悬浮窗，并在耗电管理中允许后台运行。</string>
+    <string name="vendor_hint_vivo">vivo：请在权限管理中允许悬浮窗，并在后台高耗电中允许运行。</string>
+    <string name="vendor_hint_samsung">三星：请在电池设置中将本应用设为「不受限制」，并允许显示在其他应用上层。</string>
+    <string name="vendor_hint_default">请在应用详情中允许悬浮窗权限，并关闭电池优化限制。</string>
+</resources>

@@ -1,0 +1,5 @@
+# 复制本文件为 local.properties，并改成你的 SDK 路径
+# 仅安装命令行 SDK 时，路径通常类似：
+# sdk.dir=C\:\\Users\\你的用户名\\AppData\\Local\\Android\\Sdk
+
+sdk.dir=C\:\\Users\\jipeng\\AppData\\Local\\Android\\Sdk
