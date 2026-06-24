@@ -133,15 +133,18 @@ class MainActivity : AppCompatActivity() {
         btnToggleFloat.isEnabled = allGranted
 
         val running = FloatButtonService.isRunning(this)
-        btnToggleFloat.text = if (running) {
-            getString(R.string.btn_stop_float)
+        if (running) {
+            btnToggleFloat.text = getString(R.string.btn_stop_float)
+            btnToggleFloat.backgroundTintList =
+                ContextCompat.getColorStateList(this, R.color.error)
+            tvFloatStatus.text = getString(R.string.float_running)
+            tvFloatStatus.setTextColor(ContextCompat.getColor(this, R.color.status_granted))
         } else {
-            getString(R.string.btn_start_float)
-        }
-        tvFloatStatus.text = if (running) {
-            getString(R.string.float_running)
-        } else {
-            getString(R.string.float_stopped)
+            btnToggleFloat.text = getString(R.string.btn_start_float)
+            btnToggleFloat.backgroundTintList =
+                ContextCompat.getColorStateList(this, R.color.primary)
+            tvFloatStatus.text = getString(R.string.float_stopped)
+            tvFloatStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
         }
     }
 
@@ -149,10 +152,12 @@ class MainActivity : AppCompatActivity() {
         if (granted) {
             statusView.text = getString(R.string.status_granted)
             statusView.setTextColor(ContextCompat.getColor(this, R.color.status_granted))
+            statusView.setBackgroundResource(R.drawable.bg_chip_granted)
             btn.visibility = View.GONE
         } else {
             statusView.text = getString(R.string.status_pending)
             statusView.setTextColor(ContextCompat.getColor(this, R.color.status_pending))
+            statusView.setBackgroundResource(R.drawable.bg_chip_pending)
             btn.visibility = View.VISIBLE
         }
     }
